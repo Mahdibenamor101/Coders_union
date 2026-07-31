@@ -1,10 +1,21 @@
+import json
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
 from ..models import Camera, Store
-from ..schemas import CameraCreate, CameraOut, CameraUpdate, StreamUrlOut
+from ..redis_client import camera_commands_channel, get_redis_client
+from ..schemas import (
+    CameraCreate,
+    CameraOut,
+    CameraUpdate,
+    StreamUrlOut,
+    ZoneOut,
+    ZonesUpdate,
+)
 from ..security import decrypt_rtsp_url, encrypt_rtsp_url
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
@@ -55,6 +66,34 @@ async def get_stream_url(camera_id: str, session: AsyncSession = Depends(get_ses
     """URL RTSP déchiffrée, destinée aux workers vidéo (protégée par la clé API)."""
     camera = await get_camera_or_404(camera_id, session)
     return StreamUrlOut(rtsp_url=decrypt_rtsp_url(camera.rtsp_url_encrypted))
+
+
+@router.get("/{camera_id}/zones", response_model=list[ZoneOut])
+async def get_zones(camera_id: str, session: AsyncSession = Depends(get_session)):
+    camera = await get_camera_or_404(camera_id, session)
+    return camera.zones
+
+
+@router.put("/{camera_id}/zones", response_model=list[ZoneOut])
+async def put_zones(
+    camera_id: str,
+    payload: ZonesUpdate,
+    session: AsyncSession = Depends(get_session),
+    redis=Depends(get_redis_client),
+):
+    """Remplace les zones de la caméra et notifie le worker (`update_zones`)."""
+    camera = await get_camera_or_404(camera_id, session)
+    zones = [
+        {**zone.model_dump(), "id": zone.id or str(uuid.uuid4())}
+        for zone in payload.zones
+    ]
+    camera.zones = zones
+    await session.commit()
+    await redis.publish(
+        camera_commands_channel(camera_id),
+        json.dumps({"action": "update_zones", "zones": zones}),
+    )
+    return zones
 
 
 @router.patch("/{camera_id}", response_model=CameraOut)

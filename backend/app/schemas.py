@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TenantCreate(BaseModel):
@@ -76,6 +77,33 @@ class CameraOut(BaseModel):
 
 class StreamUrlOut(BaseModel):
     rtsp_url: str
+
+
+ZoneType = Literal["rayon", "caisse", "entree", "sortie", "reserve", "autre"]
+
+
+class ZoneIn(BaseModel):
+    id: str | None = None
+    name: str = Field(min_length=1, max_length=255)
+    type: ZoneType
+    # Polygone en coordonnées normalisées [0,1] sur l'image caméra.
+    polygon: list[tuple[float, float]] = Field(min_length=3)
+
+    @field_validator("polygon")
+    @classmethod
+    def coordinates_in_unit_range(cls, polygon):
+        for x, y in polygon:
+            if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
+                raise ValueError("polygon coordinates must be normalized in [0, 1]")
+        return polygon
+
+
+class ZoneOut(ZoneIn):
+    id: str
+
+
+class ZonesUpdate(BaseModel):
+    zones: list[ZoneIn]
 
 
 class ClipRequest(BaseModel):

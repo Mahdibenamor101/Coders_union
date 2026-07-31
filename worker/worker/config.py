@@ -15,6 +15,11 @@ class WorkerConfig:
     target_fps: float
     buffer_seconds: float
     jpeg_quality: int
+    analysis_enabled: bool
+    yolo_model: str
+    analysis_fps: float
+    dwell_seconds: float
+    track_ttl_seconds: float
 
 
 def load_config() -> WorkerConfig:
@@ -36,4 +41,10 @@ def load_config() -> WorkerConfig:
         target_fps=float(os.environ.get("TARGET_FPS", "8")),
         buffer_seconds=float(os.environ.get("BUFFER_SECONDS", "60")),
         jpeg_quality=int(os.environ.get("JPEG_QUALITY", "80")),
+        analysis_enabled=os.environ.get("ANALYSIS_ENABLED", "true").lower()
+        in ("1", "true", "yes"),
+        yolo_model=os.environ.get("YOLO_MODEL", "yolov8n.pt"),
+        analysis_fps=float(os.environ.get("ANALYSIS_FPS", "5")),
+        dwell_seconds=float(os.environ.get("DWELL_SECONDS", "30")),
+        track_ttl_seconds=float(os.environ.get("TRACK_TTL_SECONDS", "5")),
     )

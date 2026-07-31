@@ -20,7 +20,7 @@ scripts/    Outils de dev (flux RTSP de test généré)
 | Phase | Contenu | État |
 |---|---|---|
 | 1 | Ingestion vidéo (RTSP, buffer, clips MinIO, CRUD) | ✅ — voir [PHASE1_README.md](PHASE1_README.md) |
-| 2 | Détection et tracking (YOLO + ByteTrack, zones) | à venir |
+| 2 | Détection et tracking (YOLO + ByteTrack, zones) | ✅ — voir [PHASE2_README.md](PHASE2_README.md) |
 | 3 | Moteur de comportements | à venir |
 | 4 | Dashboard | à venir |
 | 5 | SaaS (auth, Stripe, RGPD) | à venir |

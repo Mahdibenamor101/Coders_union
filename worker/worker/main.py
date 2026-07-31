@@ -13,6 +13,7 @@ from .commands import WORKER_EVENTS_CHANNEL, CommandListener
 from .config import WorkerConfig, load_config
 from .ring_buffer import FrameRingBuffer
 from .rtsp_reader import RtspReader
+from .zone_tracker import Zone, ZoneTracker
 
 logger = logging.getLogger("worker")
 
@@ -39,6 +40,34 @@ def fetch_stream_url(config: WorkerConfig) -> str:
         time.sleep(5)
 
 
+def fetch_zones(config: WorkerConfig) -> list[Zone]:
+    """Zones configurées pour la caméra (les mises à jour arrivent ensuite via Redis)."""
+    url = f"{config.api_url}/cameras/{config.camera_id}/zones"
+    try:
+        response = requests.get(url, headers={"X-API-Key": config.api_key}, timeout=10)
+        response.raise_for_status()
+        return [Zone.from_dict(z) for z in response.json()]
+    except (requests.RequestException, KeyError, ValueError) as exc:
+        logger.warning("could not fetch zones (%s), starting with none", exc)
+        return []
+
+
+def build_analysis(config: WorkerConfig, reader: RtspReader, zone_tracker: ZoneTracker):
+    """Construit le pipeline d'analyse, ou None si désactivé / dépendances absentes."""
+    if not config.analysis_enabled:
+        logger.info("analysis disabled (ANALYSIS_ENABLED=false)")
+        return None
+    try:
+        from .analysis import AnalysisPipeline
+        from .detection import PersonDetector
+
+        detector = PersonDetector(config.yolo_model)
+    except Exception:
+        logger.exception("failed to initialize detection, analysis disabled")
+        return None
+    return AnalysisPipeline(config, reader, detector, zone_tracker)
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -62,7 +91,24 @@ def main() -> None:
 
     reader = RtspReader(rtsp_url, buffer, config.target_fps, config.jpeg_quality)
     reader.start()
-    listener = CommandListener(config, buffer, s3)
+
+    zone_tracker = ZoneTracker(
+        zones=fetch_zones(config),
+        dwell_seconds=config.dwell_seconds,
+        track_ttl=config.track_ttl_seconds,
+    )
+    analysis = build_analysis(config, reader, zone_tracker)
+    if analysis is not None:
+        analysis.start()
+
+    listener = CommandListener(
+        config,
+        buffer,
+        s3,
+        on_update_zones=lambda zones: zone_tracker.update_zones(
+            [Zone.from_dict(z) for z in zones]
+        ),
+    )
     listener.start()
 
     stop = threading.Event()
@@ -91,6 +137,9 @@ def main() -> None:
     logger.info("shutting down")
     reader.stop()
     listener.stop()
+    if analysis is not None:
+        analysis.stop()
+        analysis.join(timeout=5)
     reader.join(timeout=5)
     listener.join(timeout=5)
 

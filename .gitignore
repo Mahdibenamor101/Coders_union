@@ -14,3 +14,6 @@ node_modules/
 
 # Divers
 .DS_Store
+
+# Poids de modèles téléchargés localement
+*.pt

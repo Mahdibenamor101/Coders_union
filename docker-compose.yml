@@ -83,6 +83,11 @@ services:
       S3_BUCKET: ${S3_BUCKET:-clips}
       TARGET_FPS: ${TARGET_FPS:-8}
       BUFFER_SECONDS: ${BUFFER_SECONDS:-60}
+      ANALYSIS_ENABLED: ${ANALYSIS_ENABLED:-true}
+      YOLO_MODEL: ${YOLO_MODEL:-yolov8n.pt}
+      ANALYSIS_FPS: ${ANALYSIS_FPS:-5}
+      DWELL_SECONDS: ${DWELL_SECONDS:-30}
+      TRACK_TTL_SECONDS: ${TRACK_TTL_SECONDS:-5}
     depends_on:
       - api
       - redis

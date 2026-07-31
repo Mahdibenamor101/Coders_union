@@ -30,10 +30,17 @@ class RtspReader(threading.Thread):
         self._jpeg_quality = int(jpeg_quality)
         self._reconnect_max_wait = reconnect_max_wait
         self._stop = threading.Event()
+        self._latest_lock = threading.Lock()
+        self._latest: tuple[float, object] | None = None
         self.connected = False
 
     def stop(self) -> None:
         self._stop.set()
+
+    def latest_frame(self) -> tuple[float, object] | None:
+        """Dernière frame échantillonnée (ts, ndarray BGR), pour le pipeline d'analyse."""
+        with self._latest_lock:
+            return self._latest
 
     def run(self) -> None:
         wait = 1.0
@@ -65,6 +72,8 @@ class RtspReader(threading.Thread):
                 )
                 if ok:
                     self._buffer.append(now, jpeg.tobytes())
+                with self._latest_lock:
+                    self._latest = (now, frame)
 
             self.connected = False
             capture.release()

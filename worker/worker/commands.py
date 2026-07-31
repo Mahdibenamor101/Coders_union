@@ -19,11 +19,18 @@ WORKER_EVENTS_CHANNEL = "worker_events"
 class CommandListener(threading.Thread):
     """Écoute `camera_commands:{camera_id}` sur Redis et traite les extractions de clips."""
 
-    def __init__(self, config: WorkerConfig, buffer: FrameRingBuffer, s3):
+    def __init__(
+        self,
+        config: WorkerConfig,
+        buffer: FrameRingBuffer,
+        s3,
+        on_update_zones=None,
+    ):
         super().__init__(daemon=True, name="command-listener")
         self._config = config
         self._buffer = buffer
         self._s3 = s3
+        self._on_update_zones = on_update_zones
         self._redis = redis.Redis.from_url(config.redis_url)
         self._stop = threading.Event()
 
@@ -44,10 +51,17 @@ class CommandListener(threading.Thread):
             except (ValueError, TypeError):
                 logger.warning("ignoring malformed command: %r", message["data"])
                 continue
-            if command.get("action") == "extract_clip":
+            action = command.get("action")
+            if action == "extract_clip":
                 threading.Thread(
                     target=self._extract_clip, args=(command,), daemon=True
                 ).start()
+            elif action == "update_zones" and self._on_update_zones is not None:
+                try:
+                    self._on_update_zones(command.get("zones", []))
+                    logger.info("zones updated (%d zones)", len(command.get("zones", [])))
+                except Exception:
+                    logger.exception("failed to apply zone update")
 
     def _extract_clip(self, command: dict) -> None:
         clip_id = command["clip_id"]

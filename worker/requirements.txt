@@ -2,3 +2,6 @@ opencv-python-headless==4.10.0.84
 redis==5.2.1
 boto3==1.35.90
 requests==2.32.3
+ultralytics==8.3.58
+# Requis par le tracking ByteTrack d'ultralytics (sinon auto-install au runtime)
+lap==0.5.13
