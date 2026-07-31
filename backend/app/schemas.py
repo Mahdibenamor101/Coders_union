@@ -106,6 +106,46 @@ class ZonesUpdate(BaseModel):
     zones: list[ZoneIn]
 
 
+class CameraSettingsIn(BaseModel):
+    """Seuils du moteur de règles, par caméra (tous optionnels — voir SPEC §6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    alert_threshold: float | None = Field(default=None, gt=0)
+    cooldown_seconds: float | None = Field(default=None, ge=0)
+    window_seconds: float | None = Field(default=None, gt=0)
+    dwell_seconds: float | None = Field(default=None, gt=0)
+    low_motion_radius: float | None = Field(default=None, ge=0, le=1)
+    min_shelf_seconds: float | None = Field(default=None, ge=0)
+    checkout_min_seconds: float | None = Field(default=None, ge=0)
+
+
+AlertStatus = Literal["pending", "confirmed", "false_positive", "dismissed"]
+
+
+class AlertOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    camera_id: str
+    rule: str
+    severity: str
+    score: float
+    status: str
+    reviewed_by: str | None
+    reviewed_at: datetime | None
+    event_ts: datetime
+    clip_object_key: str | None
+    thumbnail_object_key: str | None
+    evidence: list
+    created_at: datetime
+
+
+class AlertReviewIn(BaseModel):
+    status: AlertStatus
+    reviewed_by: str | None = Field(default=None, max_length=255)
+
+
 class ClipRequest(BaseModel):
     # Timestamp Unix de l'événement ; défaut = maintenant.
     event_ts: float | None = None

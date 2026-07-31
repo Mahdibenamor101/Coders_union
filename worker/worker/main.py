@@ -8,11 +8,13 @@ import time
 import redis
 import requests
 
+from .alerts import AlertEmitter
 from .clip_extractor import ensure_bucket, make_s3_client
 from .commands import WORKER_EVENTS_CHANNEL, CommandListener
 from .config import WorkerConfig, load_config
 from .ring_buffer import FrameRingBuffer
 from .rtsp_reader import RtspReader
+from .rules_engine import RulesConfig, RulesEngine
 from .zone_tracker import Zone, ZoneTracker
 
 logger = logging.getLogger("worker")
@@ -52,20 +54,51 @@ def fetch_zones(config: WorkerConfig) -> list[Zone]:
         return []
 
 
-def build_analysis(config: WorkerConfig, reader: RtspReader, zone_tracker: ZoneTracker):
+def fetch_settings(config: WorkerConfig) -> dict:
+    """Seuils par caméra (SPEC §6) ; les mises à jour arrivent ensuite via Redis."""
+    url = f"{config.api_url}/cameras/{config.camera_id}/settings"
+    try:
+        response = requests.get(url, headers={"X-API-Key": config.api_key}, timeout=10)
+        response.raise_for_status()
+        return response.json() or {}
+    except (requests.RequestException, ValueError) as exc:
+        logger.warning("could not fetch settings (%s), using defaults", exc)
+        return {}
+
+
+def build_analysis(
+    config: WorkerConfig,
+    reader: RtspReader,
+    zone_tracker: ZoneTracker,
+    rules_engine: RulesEngine,
+    alert_emitter: AlertEmitter,
+):
     """Construit le pipeline d'analyse, ou None si désactivé / dépendances absentes."""
     if not config.analysis_enabled:
         logger.info("analysis disabled (ANALYSIS_ENABLED=false)")
         return None
     try:
         from .analysis import AnalysisPipeline
-        from .detection import PersonDetector
+        from .detection import ObjectDetector, PersonDetector
 
         detector = PersonDetector(config.yolo_model)
+        object_detector = (
+            ObjectDetector(config.object_model, confidence=config.object_confidence)
+            if config.objects_enabled
+            else None
+        )
     except Exception:
         logger.exception("failed to initialize detection, analysis disabled")
         return None
-    return AnalysisPipeline(config, reader, detector, zone_tracker)
+    return AnalysisPipeline(
+        config,
+        reader,
+        detector,
+        zone_tracker,
+        rules_engine,
+        object_detector=object_detector,
+        alert_sink=alert_emitter.emit,
+    )
 
 
 def main() -> None:
@@ -92,14 +125,23 @@ def main() -> None:
     reader = RtspReader(rtsp_url, buffer, config.target_fps, config.jpeg_quality)
     reader.start()
 
+    camera_settings = fetch_settings(config)
     zone_tracker = ZoneTracker(
         zones=fetch_zones(config),
-        dwell_seconds=config.dwell_seconds,
+        dwell_seconds=camera_settings.get("dwell_seconds", config.dwell_seconds),
         track_ttl=config.track_ttl_seconds,
     )
-    analysis = build_analysis(config, reader, zone_tracker)
+    rules_engine = RulesEngine(RulesConfig.from_dict(camera_settings))
+    alert_emitter = AlertEmitter(config, buffer, s3)
+
+    analysis = build_analysis(config, reader, zone_tracker, rules_engine, alert_emitter)
     if analysis is not None:
         analysis.start()
+
+    def apply_settings(settings: dict) -> None:
+        rules_engine.update_config(RulesConfig.from_dict(settings))
+        if "dwell_seconds" in settings:
+            zone_tracker.set_dwell_seconds(float(settings["dwell_seconds"]))
 
     listener = CommandListener(
         config,
@@ -108,6 +150,7 @@ def main() -> None:
         on_update_zones=lambda zones: zone_tracker.update_zones(
             [Zone.from_dict(z) for z in zones]
         ),
+        on_update_settings=apply_settings,
     )
     listener.start()
 

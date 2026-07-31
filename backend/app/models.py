@@ -59,12 +59,17 @@ class Camera(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Polygones de zones (rayon, caisse, entrée/sortie…) — utilisés à partir de la Phase 2.
     zones: Mapped[list] = mapped_column(JSON, default=list)
+    # Seuils du moteur de règles, par caméra (SPEC §6) ; vide = défauts du worker.
+    settings: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     store: Mapped[Store] = relationship(back_populates="cameras")
     clips: Mapped[list["Clip"]] = relationship(
+        back_populates="camera", cascade="all, delete-orphan"
+    )
+    alerts: Mapped[list["Alert"]] = relationship(
         back_populates="camera", cascade="all, delete-orphan"
     )
 
@@ -85,3 +90,32 @@ class Clip(Base):
     )
 
     camera: Mapped[Camera] = relationship(back_populates="clips")
+
+
+class Alert(Base):
+    """Alerte de comportement à vérifier — jamais un verdict (SPEC §1).
+
+    `status` est le statut de revue humaine : pending | confirmed |
+    false_positive | dismissed.
+    """
+
+    __tablename__ = "alerts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    camera_id: Mapped[str] = mapped_column(ForeignKey("cameras.id"), index=True)
+    rule: Mapped[str] = mapped_column(String(50), index=True)
+    severity: Mapped[str] = mapped_column(String(20))
+    score: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    event_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    clip_object_key: Mapped[str | None] = mapped_column(Text)
+    thumbnail_object_key: Mapped[str | None] = mapped_column(Text)
+    # Indices ayant mené à l'alerte (findings du moteur de règles).
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    camera: Mapped[Camera] = relationship(back_populates="alerts")

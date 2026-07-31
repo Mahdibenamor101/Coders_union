@@ -25,12 +25,14 @@ class CommandListener(threading.Thread):
         buffer: FrameRingBuffer,
         s3,
         on_update_zones=None,
+        on_update_settings=None,
     ):
         super().__init__(daemon=True, name="command-listener")
         self._config = config
         self._buffer = buffer
         self._s3 = s3
         self._on_update_zones = on_update_zones
+        self._on_update_settings = on_update_settings
         self._redis = redis.Redis.from_url(config.redis_url)
         self._stop = threading.Event()
 
@@ -62,6 +64,12 @@ class CommandListener(threading.Thread):
                     logger.info("zones updated (%d zones)", len(command.get("zones", [])))
                 except Exception:
                     logger.exception("failed to apply zone update")
+            elif action == "update_settings" and self._on_update_settings is not None:
+                try:
+                    self._on_update_settings(command.get("settings", {}))
+                    logger.info("settings updated: %s", command.get("settings", {}))
+                except Exception:
+                    logger.exception("failed to apply settings update")
 
     def _extract_clip(self, command: dict) -> None:
         clip_id = command["clip_id"]

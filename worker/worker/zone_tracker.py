@@ -84,6 +84,9 @@ class ZoneTracker:
     def zones(self) -> list[Zone]:
         return list(self._zones)
 
+    def set_dwell_seconds(self, dwell_seconds: float) -> None:
+        self._dwell_seconds = dwell_seconds
+
     def process(
         self, ts: float, detections: list[tuple[int, float, float]]
     ) -> list[dict]:

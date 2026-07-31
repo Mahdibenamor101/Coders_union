@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 
 from .db import Base, get_engine
 from .events import run_worker_event_listener
-from .routers import cameras, clips, stores, tenants
+from .routers import alerts, cameras, clips, stores, tenants
 from .security import require_api_key
 
 logging.basicConfig(
@@ -28,7 +28,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Surveillance SaaS API", version="0.1.0", lifespan=lifespan)
 
-for router in (tenants.router, stores.router, cameras.router, clips.router):
+for router in (
+    tenants.router,
+    stores.router,
+    cameras.router,
+    clips.router,
+    alerts.router,
+):
     app.include_router(router, dependencies=[Depends(require_api_key)])
 
 

@@ -17,3 +17,4 @@ node_modules/
 
 # Poids de modèles téléchargés localement
 *.pt
+.coverage

@@ -20,6 +20,12 @@ class WorkerConfig:
     analysis_fps: float
     dwell_seconds: float
     track_ttl_seconds: float
+    objects_enabled: bool
+    object_model: str
+    object_every_n: int
+    object_confidence: float
+    alert_clip_pre_seconds: float
+    alert_clip_post_seconds: float
 
 
 def load_config() -> WorkerConfig:
@@ -43,8 +49,15 @@ def load_config() -> WorkerConfig:
         jpeg_quality=int(os.environ.get("JPEG_QUALITY", "80")),
         analysis_enabled=os.environ.get("ANALYSIS_ENABLED", "true").lower()
         in ("1", "true", "yes"),
-        yolo_model=os.environ.get("YOLO_MODEL", "yolov8n.pt"),
+        yolo_model=os.environ.get("YOLO_MODEL", "yolov8n-pose.pt"),
         analysis_fps=float(os.environ.get("ANALYSIS_FPS", "5")),
         dwell_seconds=float(os.environ.get("DWELL_SECONDS", "30")),
         track_ttl_seconds=float(os.environ.get("TRACK_TTL_SECONDS", "5")),
+        objects_enabled=os.environ.get("OBJECTS_ENABLED", "true").lower()
+        in ("1", "true", "yes"),
+        object_model=os.environ.get("OBJECT_MODEL", "yolov8n.pt"),
+        object_every_n=int(os.environ.get("OBJECT_EVERY_N", "2")),
+        object_confidence=float(os.environ.get("OBJECT_CONFIDENCE", "0.35")),
+        alert_clip_pre_seconds=float(os.environ.get("ALERT_CLIP_PRE_SECONDS", "20")),
+        alert_clip_post_seconds=float(os.environ.get("ALERT_CLIP_POST_SECONDS", "20")),
     )

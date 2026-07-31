@@ -11,6 +11,7 @@ from ..redis_client import camera_commands_channel, get_redis_client
 from ..schemas import (
     CameraCreate,
     CameraOut,
+    CameraSettingsIn,
     CameraUpdate,
     StreamUrlOut,
     ZoneOut,
@@ -94,6 +95,33 @@ async def put_zones(
         json.dumps({"action": "update_zones", "zones": zones}),
     )
     return zones
+
+
+@router.get("/{camera_id}/settings")
+async def get_settings(
+    camera_id: str, session: AsyncSession = Depends(get_session)
+) -> dict:
+    camera = await get_camera_or_404(camera_id, session)
+    return camera.settings or {}
+
+
+@router.put("/{camera_id}/settings")
+async def put_settings(
+    camera_id: str,
+    payload: CameraSettingsIn,
+    session: AsyncSession = Depends(get_session),
+    redis=Depends(get_redis_client),
+) -> dict:
+    """Remplace les seuils du moteur de règles et notifie le worker (`update_settings`)."""
+    camera = await get_camera_or_404(camera_id, session)
+    settings = payload.model_dump(exclude_unset=True, exclude_none=True)
+    camera.settings = settings
+    await session.commit()
+    await redis.publish(
+        camera_commands_channel(camera_id),
+        json.dumps({"action": "update_settings", "settings": settings}),
+    )
+    return settings
 
 
 @router.patch("/{camera_id}", response_model=CameraOut)
