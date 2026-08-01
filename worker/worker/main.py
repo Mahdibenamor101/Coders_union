@@ -151,13 +151,30 @@ def main() -> None:
         track_ttl=config.track_ttl_seconds,
     )
     rules_engine = RulesEngine(RulesConfig.from_dict(camera_settings))
-    alert_emitter = AlertEmitter(config, buffer, s3)
+
+    verifier = None
+    if config.verification_enabled:
+        try:
+            from .verification import MultimodalVerifier
+
+            verifier = MultimodalVerifier(config.verification_model)
+            logger.info("multimodal verification enabled (%s)", config.verification_model)
+        except Exception:
+            logger.exception("failed to init multimodal verification, disabled")
+    alert_emitter = AlertEmitter(config, buffer, s3, verifier=verifier)
+    alert_emitter.set_verification_enabled(
+        camera_settings.get("multimodal_verification", True)
+    )
 
     analysis = build_analysis(config, reader, zone_tracker, rules_engine, alert_emitter)
     if analysis is not None:
         analysis.start()
 
     def apply_settings(settings: dict) -> None:
+        if "multimodal_verification" in settings:
+            alert_emitter.set_verification_enabled(settings["multimodal_verification"])
+            if len(settings) == 1:
+                return  # commande tenant : ne pas réinitialiser les seuils caméra
         rules_engine.update_config(RulesConfig.from_dict(settings))
         if "dwell_seconds" in settings:
             zone_tracker.set_dwell_seconds(float(settings["dwell_seconds"]))

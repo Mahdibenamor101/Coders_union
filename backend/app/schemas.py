@@ -23,6 +23,7 @@ class TenantOut(BaseModel):
     name: str
     plan: str
     retention_days: int
+    multimodal_verification: bool
     created_at: datetime
 
 
@@ -204,6 +205,8 @@ class InvitationAcceptIn(BaseModel):
 class TenantUpdateMe(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     retention_days: int | None = Field(default=None, ge=1, le=90)
+    # Étape de vérification par API vision multimodale (SPEC §6), par tenant.
+    multimodal_verification: bool | None = None
 
 
 class CheckoutIn(BaseModel):

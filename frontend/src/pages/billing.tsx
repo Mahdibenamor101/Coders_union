@@ -3,6 +3,13 @@ import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
 import { ApiError, api } from "@/lib/api";
 
+interface TenantSettings {
+  id: string;
+  name: string;
+  retention_days: number;
+  multimodal_verification: boolean;
+}
+
 interface Billing {
   plan: string;
   subscription_status: string;
@@ -19,10 +26,12 @@ const PLANS = [
 
 export default function BillingPage() {
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [tenant, setTenant] = useState<TenantSettings | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     api<Billing>("/billing").then(setBilling).catch(() => {});
+    api<TenantSettings>("/tenant").then(setTenant).catch(() => {});
     if (
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("checkout") === "success"
@@ -111,6 +120,57 @@ export default function BillingPage() {
         Le paiement passe par Stripe Checkout ; la mise à jour du plan est
         confirmée par webhook. En mode test, utilisez la carte 4242 4242 4242 4242.
       </p>
+
+      {tenant && (
+        <section className="mt-8 rounded-lg border border-slate-200 bg-white p-4">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-slate-500">
+            Organisation
+          </h2>
+          <div className="mt-3 flex flex-wrap items-center gap-6 text-sm">
+            <label className="flex items-center gap-2 text-slate-700">
+              <input
+                type="checkbox"
+                checked={tenant.multimodal_verification}
+                onChange={async (e) => {
+                  const updated = await api<TenantSettings>("/tenant", {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                      multimodal_verification: e.target.checked,
+                    }),
+                  });
+                  setTenant(updated);
+                }}
+              />
+              Vérification des alertes par IA vision (réduction des faux positifs)
+            </label>
+            <label className="flex items-center gap-2 text-slate-700">
+              Rétention des clips (jours, max 90)
+              <input
+                type="number"
+                min={1}
+                max={90}
+                defaultValue={tenant.retention_days}
+                onBlur={async (e) => {
+                  const value = Number(e.target.value);
+                  if (value >= 1 && value <= 90) {
+                    const updated = await api<TenantSettings>("/tenant", {
+                      method: "PATCH",
+                      body: JSON.stringify({ retention_days: value }),
+                    });
+                    setTenant(updated);
+                  }
+                }}
+                className="w-20 rounded-md border border-slate-300 px-2 py-1"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            La vérification vision n&apos;est appelée que sur les séquences déjà
+            signalées ; elle ajuste le score, l&apos;alerte reste toujours soumise
+            à revue humaine.
+          </p>
+        </section>
+      )}
     </Layout>
   );
 }

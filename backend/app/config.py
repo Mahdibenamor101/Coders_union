@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # Job de rétention RGPD
     retention_interval_seconds: int = 86400
 
+    # SMTP (invitations) — vide = pas d'envoi, le lien reste fourni à l'admin
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@surveillance.local"
+    smtp_tls: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

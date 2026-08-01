@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record_audit
 from ..config import get_settings
 from ..db import get_session
+from ..email import send_invitation_email
 from ..models import Invitation, Tenant, User
 from ..schemas import (
     InvitationAcceptIn,
@@ -148,14 +150,19 @@ async def create_invitation(
     await record_audit(session, user.tenant_id, user.id, "invitation_created", email)
 
     invite_url = f"{get_settings().frontend_url}/invitation?token={invitation.token}"
-    # Pas de SMTP en dev : le lien est retourné à l'admin (et loggé) ; brancher
-    # un envoi d'email ici en production.
-    logger.info("invitation for %s: %s", email, invite_url)
+    tenant = await session.get(Tenant, user.tenant_id)
+    # Envoi SMTP si configuré ; sinon le lien reste fourni à l'admin (page Équipe).
+    email_sent = await asyncio.to_thread(
+        send_invitation_email, email, invite_url, tenant.name
+    )
+    if not email_sent:
+        logger.info("invitation for %s (no SMTP): %s", email, invite_url)
     return {
         "id": invitation.id,
         "email": invitation.email,
         "role": invitation.role,
         "invite_url": invite_url,
+        "email_sent": email_sent,
         "expires_at": invitation.expires_at.isoformat(),
     }
 

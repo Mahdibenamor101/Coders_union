@@ -19,9 +19,9 @@ async def test_put_settings_persists_and_notifies_worker(client, fake_redis):
     ).json()
     assert stored == payload
 
-    # Le worker lit les seuils via l'endpoint interne.
+    # Le worker lit les seuils via l'endpoint interne (enrichis du flag tenant).
     internal = (await client.get(f"/internal/cameras/{camera['id']}/settings")).json()
-    assert internal == payload
+    assert internal == {**payload, "multimodal_verification": True}
 
     assert len(fake_redis.published) == 1
     channel, command = fake_redis.published[0]

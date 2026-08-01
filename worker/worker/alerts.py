@@ -28,11 +28,20 @@ class AlertEmitter:
     la revue humaine doit voir que quelque chose a été signalé.
     """
 
-    def __init__(self, config: WorkerConfig, buffer: FrameRingBuffer, s3):
+    def __init__(
+        self, config: WorkerConfig, buffer: FrameRingBuffer, s3, verifier=None
+    ):
         self._config = config
         self._buffer = buffer
         self._s3 = s3
+        self._verifier = verifier
+        self._verification_enabled = True
         self._redis = redis.Redis.from_url(config.redis_url)
+
+    def set_verification_enabled(self, enabled: bool) -> None:
+        """Réglage tenant (SPEC §6) : l'étape multimodale est désactivable."""
+        self._verification_enabled = bool(enabled)
+        logger.info("multimodal verification %s", "enabled" if enabled else "disabled")
 
     def emit(self, decision: AlertDecision) -> None:
         threading.Thread(
@@ -59,19 +68,29 @@ class AlertEmitter:
             logger.exception("failed to build media for alert %s", alert_id)
             clip_key = thumbnail_key = None
 
+        alert = {
+            "rule": decision.rule,
+            "severity": decision.severity,
+            "score": decision.score,
+            "event_ts": decision.ts,
+            "clip_object_key": clip_key,
+            "thumbnail_object_key": thumbnail_key,
+            "evidence": decision.evidence,
+            "frame_count": frame_count,
+        }
+
+        # Étape optionnelle : vérification par API vision sur les frames clés,
+        # uniquement pour les séquences déjà signalées (jamais en continu).
+        if self._verifier is not None and self._verification_enabled and frame_count:
+            from .verification import apply_assessment
+
+            assessment = self._verifier.assess(frames, decision.rule)
+            alert = apply_assessment(alert, assessment)
+
         payload = {
             "type": "behavior_alert",
             "camera_id": self._config.camera_id,
-            "alert": {
-                "rule": decision.rule,
-                "severity": decision.severity,
-                "score": decision.score,
-                "event_ts": decision.ts,
-                "clip_object_key": clip_key,
-                "thumbnail_object_key": thumbnail_key,
-                "evidence": decision.evidence,
-                "frame_count": frame_count,
-            },
+            "alert": alert,
         }
         try:
             self._redis.publish(WORKER_EVENTS_CHANNEL, json.dumps(payload))

@@ -5,3 +5,5 @@ requests==2.32.3
 ultralytics==8.3.58
 # Requis par le tracking ByteTrack d'ultralytics (sinon auto-install au runtime)
 lap==0.5.13
+# Étape optionnelle de vérification par API vision (SPEC §6)
+anthropic==0.116.0

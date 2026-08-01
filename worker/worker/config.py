@@ -26,6 +26,8 @@ class WorkerConfig:
     object_confidence: float
     alert_clip_pre_seconds: float
     alert_clip_post_seconds: float
+    verification_enabled: bool
+    verification_model: str
 
 
 def load_config() -> WorkerConfig:
@@ -60,4 +62,9 @@ def load_config() -> WorkerConfig:
         object_confidence=float(os.environ.get("OBJECT_CONFIDENCE", "0.35")),
         alert_clip_pre_seconds=float(os.environ.get("ALERT_CLIP_PRE_SECONDS", "20")),
         alert_clip_post_seconds=float(os.environ.get("ALERT_CLIP_POST_SECONDS", "20")),
+        # L'étape multimodale requiert ANTHROPIC_API_KEY ; désactivable par tenant.
+        verification_enabled=os.environ.get("VERIFICATION_ENABLED", "true").lower()
+        in ("1", "true", "yes")
+        and bool(os.environ.get("ANTHROPIC_API_KEY")),
+        verification_model=os.environ.get("VERIFICATION_MODEL", "claude-opus-5"),
     )

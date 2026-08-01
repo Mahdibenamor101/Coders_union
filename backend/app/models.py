@@ -1,7 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -19,6 +29,9 @@ class Tenant(Base):
     plan: Mapped[str] = mapped_column(String(50), default="starter")
     # RGPD : rétention des clips en jours (30 par défaut, 90 max — validé côté schéma).
     retention_days: Mapped[int] = mapped_column(Integer, default=30)
+    # Étape optionnelle de réduction des faux positifs par API vision (SPEC §6),
+    # désactivable par tenant.
+    multimodal_verification: Mapped[bool] = mapped_column(Boolean, default=True)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(255))
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(255))
     subscription_status: Mapped[str] = mapped_column(String(50), default="none")

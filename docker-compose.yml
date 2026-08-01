@@ -69,6 +69,12 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
       STRIPE_PRICE_BUSINESS: ${STRIPE_PRICE_BUSINESS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@surveillance.local}
+      SMTP_TLS: ${SMTP_TLS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,7 +96,8 @@ services:
   worker:
     build: ./worker
     environment:
-      CAMERA_ID: ${WORKER_CAMERA_ID:-}
+      # Optionnel : restreint le superviseur à une seule caméra.
+      WORKER_CAMERA_ID: ${WORKER_CAMERA_ID:-}
       API_URL: http://api:8000
       API_KEY: ${API_KEY:?API_KEY must be set in .env}
       REDIS_URL: redis://redis:6379/0
@@ -110,6 +117,10 @@ services:
       OBJECT_EVERY_N: ${OBJECT_EVERY_N:-2}
       ALERT_CLIP_PRE_SECONDS: ${ALERT_CLIP_PRE_SECONDS:-20}
       ALERT_CLIP_POST_SECONDS: ${ALERT_CLIP_POST_SECONDS:-20}
+      # Vérification multimodale (SPEC §6) — vide = désactivée
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VERIFICATION_ENABLED: ${VERIFICATION_ENABLED:-true}
+      VERIFICATION_MODEL: ${VERIFICATION_MODEL:-claude-opus-5}
     depends_on:
       - api
       - redis

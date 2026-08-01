@@ -19,4 +19,5 @@ RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); YOLO('yolov8n-p
 
 COPY worker ./worker
 
-CMD ["python", "-m", "worker.main"]
+# Superviseur : un sous-processus worker par caméra enregistrée.
+CMD ["python", "-m", "worker.supervisor"]
