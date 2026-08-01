@@ -1,6 +1,28 @@
 import boto3
+from botocore.exceptions import ClientError
 
 from .config import get_settings
+
+
+def _internal_client():
+    settings = get_settings()
+    return boto3.client(
+        "s3",
+        endpoint_url=settings.s3_endpoint_url,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name="us-east-1",
+    )
+
+
+def object_exists(object_key: str) -> bool:
+    try:
+        _internal_client().head_object(
+            Bucket=get_settings().s3_bucket, Key=object_key
+        )
+        return True
+    except ClientError:
+        return False
 
 
 def _presign_client():

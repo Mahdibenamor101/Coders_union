@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db import get_session
 from ..models import Camera, Store
 from ..redis_client import camera_commands_channel, get_redis_client
+from ..s3 import object_exists, presign_clip_url
 from ..schemas import (
     CameraCreate,
     CameraOut,
@@ -95,6 +96,20 @@ async def put_zones(
         json.dumps({"action": "update_zones", "zones": zones}),
     )
     return zones
+
+
+@router.get("/{camera_id}/snapshot-url")
+async def get_snapshot_url(
+    camera_id: str, session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Dernière image publiée par le worker (fond de l'éditeur visuel de zones)."""
+    await get_camera_or_404(camera_id, session)
+    object_key = f"{camera_id}/snapshot.jpg"
+    if not object_exists(object_key):
+        raise HTTPException(
+            status_code=409, detail="No snapshot yet (worker offline?)"
+        )
+    return {"url": presign_clip_url(object_key, 300), "expires_in": 300}
 
 
 @router.get("/{camera_id}/settings")

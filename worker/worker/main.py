@@ -101,6 +101,25 @@ def build_analysis(
     )
 
 
+def upload_snapshot(config: WorkerConfig, buffer: FrameRingBuffer, s3) -> None:
+    """Publie la dernière frame en `{camera_id}/snapshot.jpg` (éditeur de zones)."""
+    newest_ts = buffer.newest_ts
+    if newest_ts is None:
+        return
+    frames = buffer.snapshot(newest_ts, newest_ts)
+    if not frames:
+        return
+    try:
+        s3.put_object(
+            Bucket=config.s3_bucket,
+            Key=f"{config.camera_id}/snapshot.jpg",
+            Body=frames[-1][1],
+            ContentType="image/jpeg",
+        )
+    except Exception as exc:
+        logger.warning("failed to upload snapshot: %s", exc)
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -175,6 +194,7 @@ def main() -> None:
             )
         except redis.RedisError as exc:
             logger.warning("failed to publish status: %s", exc)
+        upload_snapshot(config, buffer, s3)
         stop.wait(STATUS_INTERVAL_SECONDS)
 
     logger.info("shutting down")

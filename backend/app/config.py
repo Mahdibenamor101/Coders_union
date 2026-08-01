@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     clip_pre_seconds: int = 20
     clip_post_seconds: int = 20
 
+    # Origines autorisées pour le dashboard (séparées par des virgules).
+    cors_origins: str = "http://localhost:3000"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
