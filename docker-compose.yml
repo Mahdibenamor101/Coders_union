@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-surveillance}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  # Serveur RTSP de test : le service test-stream y pousse une mire générée,
+  # exposée sur rtsp://mediamtx:8554/teststream (rtsp://localhost:8554/teststream côté hôte).
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    ports:
+      - "8554:8554"
+
+  test-stream:
+    image: jrottenberg/ffmpeg:6.1-ubuntu
+    entrypoint: ["/bin/sh", "/scripts/test_stream.sh"]
+    volumes:
+      - ./scripts:/scripts:ro
+    depends_on:
+      - mediamtx
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-surveillance}
+      REDIS_URL: redis://redis:6379/0
+      API_KEY: ${API_KEY:?API_KEY must be set in .env}
+      FERNET_KEY: ${FERNET_KEY:?FERNET_KEY must be set in .env}
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-http://localhost:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-clips}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      STRIPE_PRICE_BUSINESS: ${STRIPE_PRICE_BUSINESS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@surveillance.local}
+      SMTP_TLS: ${SMTP_TLS:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  worker:
+    build: ./worker
+    environment:
+      # Optionnel : restreint le superviseur à une seule caméra.
+      WORKER_CAMERA_ID: ${WORKER_CAMERA_ID:-}
+      API_URL: http://api:8000
+      API_KEY: ${API_KEY:?API_KEY must be set in .env}
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-clips}
+      TARGET_FPS: ${TARGET_FPS:-8}
+      BUFFER_SECONDS: ${BUFFER_SECONDS:-60}
+      ANALYSIS_ENABLED: ${ANALYSIS_ENABLED:-true}
+      YOLO_MODEL: ${YOLO_MODEL:-yolov8n-pose.pt}
+      ANALYSIS_FPS: ${ANALYSIS_FPS:-5}
+      DWELL_SECONDS: ${DWELL_SECONDS:-30}
+      TRACK_TTL_SECONDS: ${TRACK_TTL_SECONDS:-5}
+      OBJECTS_ENABLED: ${OBJECTS_ENABLED:-true}
+      OBJECT_MODEL: ${OBJECT_MODEL:-yolov8n.pt}
+      OBJECT_EVERY_N: ${OBJECT_EVERY_N:-2}
+      ALERT_CLIP_PRE_SECONDS: ${ALERT_CLIP_PRE_SECONDS:-20}
+      ALERT_CLIP_POST_SECONDS: ${ALERT_CLIP_POST_SECONDS:-20}
+      # Vérification multimodale (SPEC §6) — vide = désactivée
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VERIFICATION_ENABLED: ${VERIFICATION_ENABLED:-true}
+      VERIFICATION_MODEL: ${VERIFICATION_MODEL:-claude-opus-5}
+    depends_on:
+      - api
+      - redis
+      - minio
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:

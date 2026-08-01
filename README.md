@@ -1,40 +1,35 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# SaaS de vidéosurveillance intelligente pour magasins
 
-## Getting Started
+SaaS B2B qui analyse les flux des caméras IP existantes d'un commerce pour signaler
+des comportements à vérifier par le personnel. **L'IA signale, l'humain décide** —
+aucune reconnaissance faciale, aucune identification biométrique.
 
-First, run the development server:
+La spécification complète du produit est dans [SPEC.md](SPEC.md).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Structure du dépôt
+
+```
+backend/    API FastAPI (REST + WebSockets) — Python 3.12
+worker/     Worker vidéo : ingestion RTSP, buffer circulaire, clips — Python + OpenCV + ffmpeg
+frontend/   Dashboard Next.js 14 + TypeScript + Tailwind (Phase 4)
+scripts/    Outils de dev (flux RTSP de test généré)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## État d'avancement
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+| Phase | Contenu | État |
+|---|---|---|
+| 1 | Ingestion vidéo (RTSP, buffer, clips MinIO, CRUD) | ✅ — voir [PHASE1_README.md](PHASE1_README.md) |
+| 2 | Détection et tracking (YOLO + ByteTrack, zones) | ✅ — voir [PHASE2_README.md](PHASE2_README.md) |
+| 3 | Moteur de comportements (règles, alertes, clips) | ✅ — voir [PHASE3_README.md](PHASE3_README.md) |
+| 4 | Dashboard (live, revue, zones, seuils, stats) | ✅ — voir [PHASE4_README.md](PHASE4_README.md) |
+| 5 | SaaS (auth JWT, multi-tenant, Stripe, RGPD) | ✅ — voir [PHASE5_README.md](PHASE5_README.md) |
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+## Démarrage rapide
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+```bash
+cp .env.example .env   # puis renseigner API_KEY et FERNET_KEY
+docker compose up -d --build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Le guide de test manuel de la phase en cours est dans [PHASE1_README.md](PHASE1_README.md).
