@@ -3,63 +3,64 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { CameraStatusDot } from "@/components/Badges";
 import Layout from "@/components/Layout";
-import { api } from "@/lib/api";
-import { Camera, Store, Tenant } from "@/lib/types";
+import { ApiError, api } from "@/lib/api";
+import { Camera, Store } from "@/lib/types";
 
 export default function CamerasPage() {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [tenantName, setTenantName] = useState("");
   const [storeName, setStoreName] = useState("");
-  const [storeTenant, setStoreTenant] = useState("");
   const [cameraName, setCameraName] = useState("");
   const [cameraStore, setCameraStore] = useState("");
   const [rtspUrl, setRtspUrl] = useState("");
 
   const refresh = useCallback(() => {
-    api<Tenant[]>("/tenants").then(setTenants).catch(() => {});
     api<Store[]>("/stores").then(setStores).catch(() => {});
     api<Camera[]>("/cameras").then(setCameras).catch(() => {});
   }, []);
 
   useEffect(refresh, [refresh]);
 
-  async function createTenant(event: FormEvent) {
-    event.preventDefault();
-    await api("/tenants", { method: "POST", body: JSON.stringify({ name: tenantName }) });
-    setTenantName("");
-    refresh();
-  }
-
   async function createStore(event: FormEvent) {
     event.preventDefault();
-    await api("/stores", {
-      method: "POST",
-      body: JSON.stringify({ tenant_id: storeTenant, name: storeName }),
-    });
+    setError(null);
+    await api("/stores", { method: "POST", body: JSON.stringify({ name: storeName }) });
     setStoreName("");
     refresh();
   }
 
   async function createCamera(event: FormEvent) {
     event.preventDefault();
-    const camera = await api<Camera>("/cameras", {
-      method: "POST",
-      body: JSON.stringify({
-        store_id: cameraStore,
-        name: cameraName,
-        rtsp_url: rtspUrl,
-      }),
-    });
-    setCameraName("");
-    setRtspUrl("");
-    setMessage(
-      `Caméra créée. Pour la suivre, renseignez WORKER_CAMERA_ID=${camera.id} dans .env puis redémarrez le worker.`
-    );
-    refresh();
+    setError(null);
+    try {
+      const camera = await api<Camera>("/cameras", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: cameraStore,
+          name: cameraName,
+          rtsp_url: rtspUrl,
+        }),
+      });
+      setCameraName("");
+      setRtspUrl("");
+      setMessage(
+        `Caméra créée. Pour la suivre, renseignez WORKER_CAMERA_ID=${camera.id} dans .env puis redémarrez le worker.`
+      );
+      refresh();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 402) {
+        setError(
+          "Limite de caméras du plan atteinte — passez à un plan supérieur (page Abonnement)."
+        );
+      } else if (e instanceof ApiError && e.status === 403) {
+        setError("Votre rôle ne permet pas de créer une caméra.");
+      } else {
+        setError(e instanceof Error ? e.message : "Erreur");
+      }
+    }
   }
 
   const storeName_ = (id: string) =>
@@ -77,6 +78,11 @@ export default function CamerasPage() {
       {message && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           {message}
+        </p>
+      )}
+      {error && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {error}
         </p>
       )}
 
@@ -106,50 +112,12 @@ export default function CamerasPage() {
       <h2 className="mb-2 mt-8 text-sm font-medium uppercase tracking-wide text-slate-500">
         Configuration
       </h2>
-      <div className="grid gap-4 md:grid-cols-3">
-        <form
-          onSubmit={createTenant}
-          className="rounded-lg border border-slate-200 bg-white p-4"
-        >
-          <h3 className="font-medium text-slate-900">1. Organisation</h3>
-          <label className="mt-2 block text-sm text-slate-700">
-            Nom
-            <input
-              value={tenantName}
-              onChange={(e) => setTenantName(e.target.value)}
-              className={inputClass}
-              required
-            />
-          </label>
-          <button type="submit" className={buttonClass}>
-            Créer l&apos;organisation
-          </button>
-          <p className="mt-2 text-xs text-slate-400">
-            {tenants.length} organisation(s)
-          </p>
-        </form>
-
+      <div className="grid gap-4 md:grid-cols-2">
         <form
           onSubmit={createStore}
           className="rounded-lg border border-slate-200 bg-white p-4"
         >
-          <h3 className="font-medium text-slate-900">2. Magasin</h3>
-          <label className="mt-2 block text-sm text-slate-700">
-            Organisation
-            <select
-              value={storeTenant}
-              onChange={(e) => setStoreTenant(e.target.value)}
-              className={inputClass}
-              required
-            >
-              <option value="">Choisir…</option>
-              {tenants.map((tenant) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <h3 className="font-medium text-slate-900">1. Magasin</h3>
           <label className="mt-2 block text-sm text-slate-700">
             Nom du magasin
             <input
@@ -162,13 +130,14 @@ export default function CamerasPage() {
           <button type="submit" className={buttonClass}>
             Créer le magasin
           </button>
+          <p className="mt-2 text-xs text-slate-400">{stores.length} magasin(s)</p>
         </form>
 
         <form
           onSubmit={createCamera}
           className="rounded-lg border border-slate-200 bg-white p-4"
         >
-          <h3 className="font-medium text-slate-900">3. Caméra</h3>
+          <h3 className="font-medium text-slate-900">2. Caméra</h3>
           <label className="mt-2 block text-sm text-slate-700">
             Magasin
             <select

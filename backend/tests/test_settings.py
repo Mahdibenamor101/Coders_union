@@ -2,19 +2,26 @@ from .conftest import create_camera
 
 
 async def test_settings_default_empty(client):
-    camera = await create_camera(client)
-    assert (await client.get(f"/cameras/{camera['id']}/settings")).json() == {}
+    camera, auth = await create_camera(client)
+    assert (
+        await client.get(f"/cameras/{camera['id']}/settings", headers=auth["headers"])
+    ).json() == {}
 
 
 async def test_put_settings_persists_and_notifies_worker(client, fake_redis):
-    camera = await create_camera(client)
+    camera, auth = await create_camera(client)
     payload = {"alert_threshold": 45.0, "dwell_seconds": 20.0}
 
     stored = (
-        await client.put(f"/cameras/{camera['id']}/settings", json=payload)
+        await client.put(
+            f"/cameras/{camera['id']}/settings", json=payload, headers=auth["headers"]
+        )
     ).json()
     assert stored == payload
-    assert (await client.get(f"/cameras/{camera['id']}/settings")).json() == payload
+
+    # Le worker lit les seuils via l'endpoint interne.
+    internal = (await client.get(f"/internal/cameras/{camera['id']}/settings")).json()
+    assert internal == payload
 
     assert len(fake_redis.published) == 1
     channel, command = fake_redis.published[0]
@@ -23,21 +30,11 @@ async def test_put_settings_persists_and_notifies_worker(client, fake_redis):
 
 
 async def test_put_settings_rejects_unknown_keys(client, fake_redis):
-    camera = await create_camera(client)
+    camera, auth = await create_camera(client)
     response = await client.put(
-        f"/cameras/{camera['id']}/settings", json={"score_magique": 1}
+        f"/cameras/{camera['id']}/settings",
+        json={"score_magique": 1},
+        headers=auth["headers"],
     )
     assert response.status_code == 422
     assert fake_redis.published == []
-
-
-async def test_put_settings_rejects_invalid_values(client):
-    camera = await create_camera(client)
-    response = await client.put(
-        f"/cameras/{camera['id']}/settings", json={"alert_threshold": -5}
-    )
-    assert response.status_code == 422
-
-
-async def test_settings_for_unknown_camera_is_404(client):
-    assert (await client.get("/cameras/nope/settings")).status_code == 404

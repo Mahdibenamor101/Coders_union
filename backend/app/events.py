@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .db import get_sessionmaker
-from .models import Alert, Camera, Clip
+from .models import Alert, Camera, Clip, Store
 from .redis_client import WORKER_EVENTS_CHANNEL
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,7 @@ async def handle_worker_event(session: AsyncSession, payload: dict) -> list[Broa
             alert.severity,
             alert.score,
         )
+        store = await session.get(Store, camera.store_id)
         return [
             (
                 ALERTS_FEED_CHANNEL,
@@ -81,6 +82,8 @@ async def handle_worker_event(session: AsyncSession, payload: dict) -> list[Broa
                     "type": "alert_created",
                     "alert_id": alert.id,
                     "camera_id": alert.camera_id,
+                    # Permet au WebSocket de ne diffuser qu'aux clients du tenant.
+                    "tenant_id": store.tenant_id if store else None,
                     "rule": alert.rule,
                     "severity": alert.severity,
                     "score": alert.score,

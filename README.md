@@ -23,7 +23,7 @@ scripts/    Outils de dev (flux RTSP de test généré)
 | 2 | Détection et tracking (YOLO + ByteTrack, zones) | ✅ — voir [PHASE2_README.md](PHASE2_README.md) |
 | 3 | Moteur de comportements (règles, alertes, clips) | ✅ — voir [PHASE3_README.md](PHASE3_README.md) |
 | 4 | Dashboard (live, revue, zones, seuils, stats) | ✅ — voir [PHASE4_README.md](PHASE4_README.md) |
-| 5 | SaaS (auth, Stripe, RGPD) | à venir |
+| 5 | SaaS (auth JWT, multi-tenant, Stripe, RGPD) | ✅ — voir [PHASE5_README.md](PHASE5_README.md) |
 
 ## Démarrage rapide
 

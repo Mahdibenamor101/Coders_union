@@ -32,12 +32,7 @@ export default function AlertDetailPage() {
   const [alert, setAlert] = useState<Alert | null>(null);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
   const [clipError, setClipError] = useState(false);
-  const [reviewer, setReviewer] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setReviewer(localStorage.getItem("reviewer_name") ?? "");
-  }, []);
 
   const load = useCallback(() => {
     if (!alertId) return;
@@ -52,11 +47,10 @@ export default function AlertDetailPage() {
   async function review(status: AlertStatus) {
     if (!alertId) return;
     setSaving(true);
-    localStorage.setItem("reviewer_name", reviewer);
     try {
       const updated = await api<Alert>(`/alerts/${alertId}/review`, {
         method: "POST",
-        body: JSON.stringify({ status, reviewed_by: reviewer || null }),
+        body: JSON.stringify({ status }),
       });
       setAlert(updated);
     } finally {
@@ -165,15 +159,9 @@ export default function AlertDetailPage() {
               </div>
             ) : (
               <>
-                <label className="block text-sm font-medium text-slate-700">
-                  Votre nom
-                  <input
-                    value={reviewer}
-                    onChange={(e) => setReviewer(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="ex. A. Martin"
-                  />
-                </label>
+                <p className="text-sm text-slate-500">
+                  La décision sera enregistrée à votre nom.
+                </p>
                 <div className="mt-3 flex flex-col gap-2">
                   {REVIEW_ACTIONS.map((action) => (
                     <button

@@ -24,7 +24,7 @@ STATUS_INTERVAL_SECONDS = 10.0
 
 def fetch_stream_url(config: WorkerConfig) -> str:
     """Récupère l'URL RTSP déchiffrée auprès de l'API (retry tant que la caméra n'existe pas)."""
-    url = f"{config.api_url}/cameras/{config.camera_id}/stream-url"
+    url = f"{config.api_url}/internal/cameras/{config.camera_id}/stream-url"
     while True:
         try:
             response = requests.get(
@@ -44,7 +44,7 @@ def fetch_stream_url(config: WorkerConfig) -> str:
 
 def fetch_zones(config: WorkerConfig) -> list[Zone]:
     """Zones configurées pour la caméra (les mises à jour arrivent ensuite via Redis)."""
-    url = f"{config.api_url}/cameras/{config.camera_id}/zones"
+    url = f"{config.api_url}/internal/cameras/{config.camera_id}/zones"
     try:
         response = requests.get(url, headers={"X-API-Key": config.api_key}, timeout=10)
         response.raise_for_status()
@@ -56,7 +56,7 @@ def fetch_zones(config: WorkerConfig) -> list[Zone]:
 
 def fetch_settings(config: WorkerConfig) -> dict:
     """Seuils par caméra (SPEC §6) ; les mises à jour arrivent ensuite via Redis."""
-    url = f"{config.api_url}/cameras/{config.camera_id}/settings"
+    url = f"{config.api_url}/internal/cameras/{config.camera_id}/settings"
     try:
         response = requests.get(url, headers={"X-API-Key": config.api_key}, timeout=10)
         response.raise_for_status()

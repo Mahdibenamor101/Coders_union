@@ -27,7 +27,7 @@ class TenantOut(BaseModel):
 
 
 class StoreCreate(BaseModel):
-    tenant_id: str
+    # Le tenant est celui de l'utilisateur connecté — jamais fourni par le client.
     name: str = Field(min_length=1, max_length=255)
     address: str = ""
     timezone: str = "UTC"
@@ -142,8 +142,80 @@ class AlertOut(BaseModel):
 
 
 class AlertReviewIn(BaseModel):
+    # reviewed_by est l'utilisateur connecté, déterminé côté serveur.
     status: AlertStatus
-    reviewed_by: str | None = Field(default=None, max_length=255)
+
+
+UserRole = Literal["admin", "manager", "viewer"]
+
+
+class RegisterIn(BaseModel):
+    """Onboarding : crée l'organisation (tenant) et son premier admin."""
+
+    company_name: str = Field(min_length=1, max_length=255)
+    email: str = Field(min_length=3, max_length=255, pattern=r"^\S+@\S+\.\S+$")
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(default="", max_length=255)
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    name: str
+    role: str
+    created_at: datetime
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class InvitationCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=255, pattern=r"^\S+@\S+\.\S+$")
+    role: UserRole = "viewer"
+
+
+class InvitationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    role: str
+    expires_at: datetime
+    accepted_at: datetime | None
+    created_at: datetime
+
+
+class InvitationAcceptIn(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(default="", max_length=255)
+
+
+class TenantUpdateMe(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    retention_days: int | None = Field(default=None, ge=1, le=90)
+
+
+class CheckoutIn(BaseModel):
+    plan: Literal["pro", "business"]
+
+
+class BillingOut(BaseModel):
+    plan: str
+    subscription_status: str
+    camera_count: int
+    camera_limit: int
+    configured: bool
 
 
 class ClipRequest(BaseModel):

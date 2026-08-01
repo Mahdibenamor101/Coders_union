@@ -6,3 +6,6 @@ pydantic-settings==2.7.0
 cryptography==44.0.0
 redis==5.2.1
 boto3==1.35.90
+PyJWT==2.10.1
+bcrypt==4.2.1
+stripe==11.4.0

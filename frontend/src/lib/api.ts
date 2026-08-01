@@ -1,19 +1,19 @@
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const KEY_STORAGE = "surveillance_api_key";
+const TOKEN_STORAGE = "surveillance_token";
 
-export function getApiKey(): string {
+export function getToken(): string {
   if (typeof window === "undefined") return "";
-  return localStorage.getItem(KEY_STORAGE) ?? "";
+  return localStorage.getItem(TOKEN_STORAGE) ?? "";
 }
 
-export function setApiKey(key: string) {
-  localStorage.setItem(KEY_STORAGE, key);
+export function setToken(token: string) {
+  localStorage.setItem(TOKEN_STORAGE, token);
 }
 
-export function clearApiKey() {
-  localStorage.removeItem(KEY_STORAGE);
+export function clearToken() {
+  localStorage.removeItem(TOKEN_STORAGE);
 }
 
 export class ApiError extends Error {
@@ -27,16 +27,23 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": getApiKey(),
+      Authorization: `Bearer ${getToken()}`,
       ...(options.headers || {}),
     },
   });
   if (response.status === 401 && typeof window !== "undefined") {
+    clearToken();
     window.location.href = "/login";
     throw new ApiError(401, "Non autorisé");
   }
   if (!response.ok) {
-    throw new ApiError(response.status, await response.text());
+    let detail = await response.text();
+    try {
+      detail = JSON.parse(detail).detail ?? detail;
+    } catch {
+      // texte brut
+    }
+    throw new ApiError(response.status, detail);
   }
   if (response.status === 204) return undefined as T;
   return response.json();
@@ -44,5 +51,5 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
 export function alertsWsUrl(): string {
   const base = API_URL.replace(/^http/, "ws");
-  return `${base}/ws/alerts?api_key=${encodeURIComponent(getApiKey())}`;
+  return `${base}/ws/alerts?token=${encodeURIComponent(getToken())}`;
 }

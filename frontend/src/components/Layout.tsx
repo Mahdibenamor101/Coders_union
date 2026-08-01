@@ -2,7 +2,8 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { ReactNode, useEffect, useState } from "react";
 
-import { clearApiKey, getApiKey } from "@/lib/api";
+import { clearToken, getToken } from "@/lib/api";
+import { Me, fetchMe, isAdmin } from "@/lib/auth";
 
 const NAV = [
   { href: "/", label: "Live" },
@@ -11,19 +12,42 @@ const NAV = [
   { href: "/stats", label: "Statistiques" },
 ];
 
-export default function Layout({ children }: { children: ReactNode }) {
+const ADMIN_NAV = [
+  { href: "/users", label: "Équipe" },
+  { href: "/billing", label: "Abonnement" },
+];
+
+export default function Layout({
+  children,
+  me,
+  onMe,
+}: {
+  children: ReactNode;
+  me?: Me | null;
+  onMe?: (me: Me) => void;
+}) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [currentUser, setCurrentUser] = useState<Me | null>(me ?? null);
 
   useEffect(() => {
-    if (!getApiKey()) {
+    if (!getToken()) {
       router.replace("/login");
-    } else {
-      setReady(true);
+      return;
     }
+    setReady(true);
+    fetchMe()
+      .then((user) => {
+        setCurrentUser(user);
+        onMe?.(user);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   if (!ready) return null;
+
+  const nav = isAdmin(currentUser) ? [...NAV, ...ADMIN_NAV] : NAV;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -31,10 +55,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-8">
             <span className="text-lg font-semibold text-slate-900">
-              Surveillance
+              {currentUser?.tenant.name ?? "Surveillance"}
             </span>
-            <nav className="flex gap-1">
-              {NAV.map((item) => {
+            <nav className="flex flex-wrap gap-1">
+              {nav.map((item) => {
                 const active =
                   item.href === "/"
                     ? router.pathname === "/"
@@ -55,15 +79,18 @@ export default function Layout({ children }: { children: ReactNode }) {
               })}
             </nav>
           </div>
-          <button
-            onClick={() => {
-              clearApiKey();
-              router.push("/login");
-            }}
-            className="text-sm text-slate-500 hover:text-slate-900"
-          >
-            Se déconnecter
-          </button>
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <span>{currentUser?.email}</span>
+            <button
+              onClick={() => {
+                clearToken();
+                router.push("/login");
+              }}
+              className="hover:text-slate-900"
+            >
+              Se déconnecter
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>

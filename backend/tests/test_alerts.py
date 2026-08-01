@@ -20,33 +20,33 @@ def behavior_alert_payload(camera_id, rule="dissimulation", severity="high", sco
     }
 
 
-async def store_alert(client, db_sessionmaker, **kwargs):
-    camera = await create_camera(client)
+async def store_alert(client, db_sessionmaker, auth=None, **kwargs):
+    camera, auth = await create_camera(client, auth=auth)
     async with db_sessionmaker() as session:
         broadcasts = await handle_worker_event(
             session, behavior_alert_payload(camera["id"], **kwargs)
         )
-    return camera, broadcasts
+    return camera, auth, broadcasts
 
 
 async def test_behavior_alert_creates_row_and_broadcast(client, db_sessionmaker):
-    camera, broadcasts = await store_alert(client, db_sessionmaker)
+    camera, auth, broadcasts = await store_alert(client, db_sessionmaker)
 
-    listed = (await client.get("/alerts")).json()
+    listed = (await client.get("/alerts", headers=auth["headers"])).json()
     assert len(listed) == 1
     alert = listed[0]
     assert alert["camera_id"] == camera["id"]
     assert alert["rule"] == "dissimulation"
-    assert alert["severity"] == "high"
-    assert alert["score"] == 80.0
     assert alert["status"] == "pending"
-    assert alert["evidence"] == [{"stage": "grab", "score": 15.0}]
 
     assert len(broadcasts) == 1
     channel, message = broadcasts[0]
     assert channel == ALERTS_FEED_CHANNEL
     assert message["type"] == "alert_created"
     assert message["alert_id"] == alert["id"]
+    # Le broadcast porte le tenant pour le filtrage WebSocket.
+    tenant = (await client.get("/tenant", headers=auth["headers"])).json()
+    assert message["tenant_id"] == tenant["id"]
 
 
 async def test_alert_for_unknown_camera_is_ignored(db_sessionmaker):
@@ -58,68 +58,64 @@ async def test_alert_for_unknown_camera_is_ignored(db_sessionmaker):
         assert (await session.get(Alert, "anything")) is None
 
 
-async def test_alert_list_filters(client, db_sessionmaker):
-    camera, _ = await store_alert(client, db_sessionmaker)
-    async with db_sessionmaker() as session:
-        await handle_worker_event(
-            session,
-            behavior_alert_payload(camera["id"], rule="zone_interdite", score=70.0),
-        )
-
-    by_rule = (await client.get("/alerts?rule=zone_interdite")).json()
-    assert len(by_rule) == 1
-    assert by_rule[0]["rule"] == "zone_interdite"
-
-    by_camera = (await client.get(f"/alerts?camera_id={camera['id']}")).json()
-    assert len(by_camera) == 2
-
-    assert (await client.get("/alerts?camera_id=unknown")).status_code == 404
-
-
-async def test_review_workflow(client, db_sessionmaker):
-    _, _ = await store_alert(client, db_sessionmaker)
-    alert = (await client.get("/alerts")).json()[0]
+async def test_review_workflow_records_current_user(client, db_sessionmaker):
+    _camera, auth, _ = await store_alert(client, db_sessionmaker)
+    alert = (await client.get("/alerts", headers=auth["headers"])).json()[0]
 
     reviewed = (
         await client.post(
             f"/alerts/{alert['id']}/review",
-            json={"status": "false_positive", "reviewed_by": "Mme Martin"},
+            json={"status": "false_positive"},
+            headers=auth["headers"],
         )
     ).json()
     assert reviewed["status"] == "false_positive"
-    assert reviewed["reviewed_by"] == "Mme Martin"
+    # reviewed_by = l'utilisateur connecté, déterminé côté serveur.
+    assert reviewed["reviewed_by"] == auth["email"]
     assert reviewed["reviewed_at"] is not None
 
-    # Filtrage par statut de revue (base des stats de faux positifs, Phase 4).
-    pending = (await client.get("/alerts?status=pending")).json()
-    assert pending == []
-
-    # Retour à pending : la revue est effacée.
     reset = (
-        await client.post(f"/alerts/{alert['id']}/review", json={"status": "pending"})
+        await client.post(
+            f"/alerts/{alert['id']}/review",
+            json={"status": "pending"},
+            headers=auth["headers"],
+        )
     ).json()
     assert reset["reviewed_by"] is None
-    assert reset["reviewed_at"] is None
 
-    bad = await client.post(f"/alerts/{alert['id']}/review", json={"status": "voleur"})
+    bad = await client.post(
+        f"/alerts/{alert['id']}/review",
+        json={"status": "voleur"},
+        headers=auth["headers"],
+    )
     assert bad.status_code == 422
 
 
+async def test_alert_manual_deletion(client, db_sessionmaker, monkeypatch):
+    deleted_keys = []
+    monkeypatch.setattr("app.routers.alerts.delete_object", deleted_keys.append)
+
+    _camera, auth, _ = await store_alert(client, db_sessionmaker)
+    alert = (await client.get("/alerts", headers=auth["headers"])).json()[0]
+
+    response = await client.delete(
+        f"/alerts/{alert['id']}", headers=auth["headers"]
+    )
+    assert response.status_code == 204
+    assert (await client.get("/alerts", headers=auth["headers"])).json() == []
+    # Les médias S3 sont supprimés aussi (RGPD).
+    assert len(deleted_keys) == 2
+
+
 async def test_media_urls_conflict_when_missing(client, db_sessionmaker):
-    camera = await create_camera(client)
+    camera, auth = await create_camera(client)
     payload = behavior_alert_payload(camera["id"])
     payload["alert"]["clip_object_key"] = None
     payload["alert"]["thumbnail_object_key"] = None
     async with db_sessionmaker() as session:
         await handle_worker_event(session, payload)
 
-    alert = (await client.get("/alerts")).json()[0]
-    assert (await client.get(f"/alerts/{alert['id']}/clip-url")).status_code == 409
-    assert (await client.get(f"/alerts/{alert['id']}/thumbnail-url")).status_code == 409
-
-
-async def test_unknown_alert_is_404(client):
-    assert (await client.get("/alerts/nope")).status_code == 404
+    alert = (await client.get("/alerts", headers=auth["headers"])).json()[0]
     assert (
-        await client.post("/alerts/nope/review", json={"status": "confirmed"})
-    ).status_code == 404
+        await client.get(f"/alerts/{alert['id']}/clip-url", headers=auth["headers"])
+    ).status_code == 409

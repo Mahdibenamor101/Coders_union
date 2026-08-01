@@ -24,6 +24,21 @@ class Settings(BaseSettings):
 
     # Origines autorisées pour le dashboard (séparées par des virgules).
     cors_origins: str = "http://localhost:3000"
+    frontend_url: str = "http://localhost:3000"
+
+    # Auth utilisateurs (Phase 5)
+    jwt_secret: str
+    jwt_ttl_hours: int = 24
+    bcrypt_rounds: int = 12
+
+    # Stripe (Phase 5) — vide = facturation désactivée
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_business: str = ""
+
+    # Job de rétention RGPD
+    retention_interval_seconds: int = 86400
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

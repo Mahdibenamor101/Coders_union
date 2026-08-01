@@ -15,6 +15,16 @@ def _internal_client():
     )
 
 
+def delete_object(object_key: str) -> None:
+    """Suppression best-effort d'un objet (jobs RGPD et suppressions manuelles)."""
+    try:
+        _internal_client().delete_object(
+            Bucket=get_settings().s3_bucket, Key=object_key
+        )
+    except ClientError:
+        pass
+
+
 def object_exists(object_key: str) -> bool:
     try:
         _internal_client().head_object(
